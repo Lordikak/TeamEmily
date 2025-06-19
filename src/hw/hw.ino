@@ -29,14 +29,14 @@ Encoder right_enc(3,2);
 Encoder left_enc(19,18);
 
 double setpointr, inputr, outputr;
-double rp = 40, ri = 20, rd = 0; 
+double rp = 20, ri = 8, rd = 3; 
 double setpointl, inputl, outputl;
-double lp = 40, li = 20, ld = 0;
+double lp = 20, li = 8, ld = 3;
 
 PID pid_right(&inputr, &outputr, &setpointr, rp, ri, rd, 0);
 PID pid_left(&inputl, &outputl, &setpointl, lp, li, ld, 0);
 
-static const float ticks_per_cm = 1700 / (2* PI); // TODO: measure this value
+static const float ticks_per_cm = 1833 / (6.7* PI); // TODO: measure this value
 static const float steps_per_cm = 50.0; // TODO: measure this value
 
 static const int in_loop_delay = 0;
@@ -89,7 +89,7 @@ void drive_differential (float left_distance, float right_distance, float s = 50
 
 
 
-  for(float step = 0; step <= total_dist; step+= .05){
+  for(float step = 0; step <= total_dist; step+= .003){ //0.006 to 0.003
     setpointl = (step * left_ratio);
     setpointr = (step * right_ratio);
 
@@ -150,10 +150,10 @@ void drive_differential (float left_distance, float right_distance, float s = 50
 
     
     if(outputr > 0){
-      analogWrite(right_forward_pin, constrain(abs(outputr), 0, 255)); // TODO: some translation
+      analogWrite(right_forward_pin, constrain(abs(outputr), 0, 254)); // TODO: some translation
       analogWrite(right_backward_pin, 0);
     }else{
-      analogWrite(right_backward_pin, constrain(abs(outputr), 0, 255));
+      analogWrite(right_backward_pin, constrain(abs(outputr), 0, 254));
       analogWrite(right_forward_pin, 0);
     }
 
@@ -203,18 +203,18 @@ void drive_differential (float left_distance, float right_distance, float s = 50
     pid_right.Compute();
 
     if(outputr > 0){
-      analogWrite(right_forward_pin, constrain(abs(outputr), 0, 255));
+      analogWrite(right_forward_pin, constrain(abs(outputr), 0, 254));
       analogWrite(right_backward_pin, 0);
     }else{
-      analogWrite(right_backward_pin, constrain(abs(outputr), 0, 255));
+      analogWrite(right_backward_pin, constrain(abs(outputr), 0, 254));
       analogWrite(right_forward_pin, 0);
     }
 
     if(outputl > 0){
-      analogWrite(left_forward_pin, constrain(abs(outputl), 0, 255));
+      analogWrite(left_forward_pin, constrain(abs(outputl), 0, 254));
       analogWrite(left_backward_pin, 0);
     }else{
-      analogWrite(left_backward_pin, constrain(abs(outputl), 0, 255));
+      analogWrite(left_backward_pin, constrain(abs(outputl), 0, 254));
       analogWrite(left_forward_pin, 0);  
     }
 
@@ -317,7 +317,7 @@ void test_rotate_serial() {
     if (dist != 0.0) {
       Serial.print("Rotating: ");
       Serial.println(dist);
-      drive_differential(dist, 0 );
+      drive_differential(dist,dist );
       Serial.println("Done rotating.");
     }
     // print overshoot
