@@ -2,7 +2,7 @@
 
 #include <Encoder.h>
 #include <Arduino.h>
-
+#include <Servo.h>
 
 
 #define right_forward_pin 11
@@ -10,11 +10,15 @@
 #define left_forward_pin 8
 #define left_backward_pin 9
 
+#define BUTTON_PIN 0
+
+#define PADDLE_PIN 7
+
 
 #define speed 200
-#define wheel_setoff 10
+#define wheel_setoff 8.2
 
-#define DEBUG
+//#define DEBUG
 //#define DEBUG3
 //#define DEBUG_ENC
 //#define DEBUG2
@@ -29,9 +33,9 @@ Encoder right_enc(3,2);
 Encoder left_enc(19,18);
 
 double setpointr, inputr, outputr;
-double rp = 20, ri = 8, rd = 3; 
+double rp = 36, ri = .5, rd = 1; 
 double setpointl, inputl, outputl;
-double lp = 20, li = 8, ld = 3;
+double lp = 36, li = .5, ld = 1;
 
 PID pid_right(&inputr, &outputr, &setpointr, rp, ri, rd, 0);
 PID pid_left(&inputl, &outputl, &setpointl, lp, li, ld, 0);
@@ -40,6 +44,27 @@ static const float ticks_per_cm = 1833 / (6.7* PI); // TODO: measure this value
 static const float steps_per_cm = 50.0; // TODO: measure this value
 
 static const int in_loop_delay = 0;
+
+const int homePosition = 90;
+int servoPin = PADDLE_PIN;
+static Servo paddleServo;
+
+void initPaddleServo(int pin) {
+    servoPin = pin;
+    paddleServo.attach(servoPin);
+    resetPaddle();
+}
+
+void movePaddle(float degrees) {
+    // Clamp degrees to [0, 180] for most servos
+    degrees = homePosition-90;
+    degrees=constrain(degrees, 0, 180);
+    paddleServo.write(degrees);
+}
+
+void resetPaddle() {
+    movePaddle(0);
+}
 
 void reset_r_PID(){
   inputr = 0;
@@ -75,9 +100,18 @@ int cm_to_ticks(float cm){
  */
 
 
-void drive_differential (float left_distance, float right_distance, float s = 50){
+void drive_differential (float left_distance, float right_distance, float s = 50) {
   reset_l_PID();
   reset_r_PID();
+
+  pid_right.SetMode(AUTOMATIC);
+  pid_left.SetMode(AUTOMATIC);
+
+  Serial.print("Left Distance: ");
+  Serial.print(left_distance);
+  Serial.print(" cm, Right Distance: ");
+  Serial.print(right_distance);
+  Serial.println(" cm");
 
 
   float total_dist = max(abs(left_distance), abs(right_distance));
@@ -192,7 +226,7 @@ void drive_differential (float left_distance, float right_distance, float s = 50
   Serial.println();
   #endif
 
-  bool reached = false;
+  bool reached = true;
   unsigned long reached_time = 0;
 
   while (true) {
@@ -203,18 +237,18 @@ void drive_differential (float left_distance, float right_distance, float s = 50
     pid_right.Compute();
 
     if(outputr > 0){
-      analogWrite(right_forward_pin, constrain(abs(outputr), 0, 254));
+      analogWrite(right_forward_pin, constrain(abs(outputr), 0, 255));
       analogWrite(right_backward_pin, 0);
     }else{
-      analogWrite(right_backward_pin, constrain(abs(outputr), 0, 254));
+      analogWrite(right_backward_pin, constrain(abs(outputr), 0, 255));
       analogWrite(right_forward_pin, 0);
     }
 
     if(outputl > 0){
-      analogWrite(left_forward_pin, constrain(abs(outputl), 0, 254));
+      analogWrite(left_forward_pin, constrain(abs(outputl), 0, 255));
       analogWrite(left_backward_pin, 0);
     }else{
-      analogWrite(left_backward_pin, constrain(abs(outputl), 0, 254));
+      analogWrite(left_backward_pin, constrain(abs(outputl), 0, 255));
       analogWrite(left_forward_pin, 0);  
     }
 
@@ -224,7 +258,7 @@ void drive_differential (float left_distance, float right_distance, float s = 50
     }
 
     // If reached, check if 2 seconds have passed
-    if (reached && (millis() - reached_time >= 2000)) {
+    if (reached && (millis() - reached_time >= 5000)) {
       break;
     }
 
@@ -242,9 +276,8 @@ void drive_differential (float left_distance, float right_distance, float s = 50
 
 }
 
-void rotate (float deg, float dist = 0, float s = 50){
-  pid_right.SetMode(AUTOMATIC);
-  pid_left.SetMode(AUTOMATIC);
+void rotate (float deg, float dist = 0, float s = 50) {
+  
 
   float left_wheel_circ = (wheel_setoff + dist) * 2 * PI;
   float right_wheel_circ = (-wheel_setoff + dist) * 2 * PI; 
@@ -253,21 +286,6 @@ void rotate (float deg, float dist = 0, float s = 50){
 
   float left_dist = left_wheel_circ * (deg / 360);
   float right_dist = right_wheel_circ * (deg / 360);
-
-  #ifdef DEBUG
-  Serial.print("Left Wheel Circumference: ");
-  Serial.print(left_wheel_circ);
-  Serial.print(" cm, Right Wheel Circumference: ");
-  Serial.print(right_wheel_circ);
-  Serial.print(" cm, Middle Circumference: ");
-  Serial.print(middle_circ);
-  Serial.println(" cm");
-  Serial.print("Left Distance: ");
-  Serial.print(left_dist);
-  Serial.print(" cm, Right Distance: ");
-  Serial.print(right_dist);
-  Serial.println(" cm");
-  #endif
 
   drive_differential(left_dist, right_dist, s);
 
@@ -293,11 +311,34 @@ void setup() {
 
   Serial.println("Init done");
 
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  pinMode(right_forward_pin, OUTPUT);
+  pinMode(right_backward_pin, OUTPUT);
+  pinMode(left_forward_pin, OUTPUT);
+  pinMode(left_backward_pin, OUTPUT);
+
+  reset_l_PID();
+  reset_r_PID();
+
+  initPaddleServo(PADDLE_PIN);
+
+  //delay(2000);
+  //test_slalom();
+
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  test_rotate_serial();
+  test_drive_serial();
+
+  //if (digitalRead(BUTTON_PIN) == LOW) {
+  //  Serial.println("Button pressed! Executing slalom test...");
+  //  test_slalom();
+  //  Serial.println("Done slalom.");
+  //  // Simple debounce
+  //  delay(500);
+  //}
 
 #ifdef DEBUG_ENC
   int re = right_enc.read();
@@ -329,8 +370,137 @@ void test_rotate_serial() {
     Serial.print(" cm, Right Distance: ");
     Serial.print(distr);
     Serial.println(" cm");
-
-
   }
   
+}
+
+void test_drive_serial() {
+  if (Serial.available() > 0) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    if (input.length() == 0) return;
+
+    // If input is 's' or 'S', run slalom test
+    if (input.equalsIgnoreCase("s")) {
+      Serial.println("Executing slalom test...");
+      test_slalom();
+      Serial.println("Done slalom.");
+      return;
+    }
+
+    char mode = input.charAt(0);
+    // Check for rotate with two parameters: e.g. "r90,20" or "r 90 20"
+    if (mode == 'r' || mode == 'R') {
+      // Remove the 'r' or 'R'
+      String params = input.substring(1);
+      params.trim();
+      float angle = 0, dist = 0;
+      int commaIdx = params.indexOf(',');
+      int spaceIdx = params.indexOf(' ');
+      if (commaIdx > 0) {
+        angle = params.substring(0, commaIdx).toFloat();
+        dist = params.substring(commaIdx + 1).toFloat();
+      } else if (spaceIdx > 0) {
+        angle = params.substring(0, spaceIdx).toFloat();
+        dist = params.substring(spaceIdx + 1).toFloat();
+      } else {
+        angle = params.toFloat();
+        dist = 0;
+      }
+      Serial.print("Rotating: ");
+      Serial.print(angle);
+      Serial.print(" deg, dist: ");
+      Serial.println(dist);
+      rotate(angle, dist);
+      Serial.println("Done rotating.");
+    } else if (mode == 'd' || mode == 'D') {
+      // Default: drive (with or without 'd' prefix)
+      float value;
+      if (mode == 'd' || mode == 'D') {
+        value = input.substring(1).toFloat();
+      } else {
+        value = input.toFloat();
+      }
+      Serial.print("Driving: ");
+      Serial.println(value);
+      drive(value);
+      Serial.println("Done driving.");
+    }else if (mode == 'p' || mode == 'P') {
+      // Paddle control
+      String paddleCommand = input.substring(1);
+      paddleCommand.trim();
+      if (paddleCommand.length() > 0) {
+        float degrees = paddleCommand.toFloat();
+        Serial.print("Moving paddle to: ");
+        Serial.print(degrees);
+        Serial.println(" degrees");
+        movePaddle(degrees);
+      } else {
+        Serial.println("No paddle command provided.");
+      }
+    }
+    
+    else {
+      Serial.println("Unknown command. Use 'r' for rotate or 'd' for drive.");
+      return;
+    }
+
+    // print overshoot
+    delay(2000);
+    float distl = ticks_to_cm(left_enc.read());
+    float distr = ticks_to_cm(right_enc.read());
+    Serial.print("Left Distance: ");
+    Serial.print(distl);
+    Serial.print(" cm, Right Distance: ");
+    Serial.print(distr);
+    Serial.println(" cm");
+  }
+}
+
+void test_slalom() {
+  //drive(40);
+  delay(2000);
+  rotate(90, 20);
+  // Print distance after first rotate
+  Serial.print("After rotate(90, 20): L=");
+  Serial.print(ticks_to_cm(left_enc.read()));
+  Serial.print(" cm, R=");
+  Serial.print(ticks_to_cm(right_enc.read()));
+  Serial.println(" cm");
+
+  rotate(-180, -20);
+  Serial.print("After rotate(-180, -20): L=");
+  Serial.print(ticks_to_cm(left_enc.read()));
+  Serial.print(" cm, R=");
+  Serial.print(ticks_to_cm(right_enc.read()));
+  Serial.println(" cm");
+
+  rotate(180, 20);
+  Serial.print("After rotate(180, 20): L=");
+  Serial.print(ticks_to_cm(left_enc.read()));
+  Serial.print(" cm, R=");
+  Serial.print(ticks_to_cm(right_enc.read()));
+  Serial.println(" cm");
+
+  rotate(-180, -20);
+  Serial.print("After rotate(-180, -20): L=");
+  Serial.print(ticks_to_cm(left_enc.read()));
+  Serial.print(" cm, R=");
+  Serial.print(ticks_to_cm(right_enc.read()));
+  Serial.println(" cm");
+
+  rotate(180, 20);
+  Serial.print("After rotate(180, 20): L=");
+  Serial.print(ticks_to_cm(left_enc.read()));
+  Serial.print(" cm, R=");
+  Serial.print(ticks_to_cm(right_enc.read()));
+  Serial.println(" cm");
+  
+  rotate(-90, -20);
+  Serial.print("After rotate(-90, -20): L=");
+  Serial.print(ticks_to_cm(left_enc.read()));
+  Serial.print(" cm, R=");
+  Serial.print(ticks_to_cm(right_enc.read()));
+  Serial.println(" cm");
+  drive(40);
 }
