@@ -10,10 +10,29 @@
 #define left_forward_pin 8
 #define left_backward_pin 9
 
-#define BUTTON_PIN 0
+
 
 #define PADDLE_PIN 7
 
+#define BUTTON_SPORT_MODE 1    // D1
+#define BUTTON_LAUNCH 0        // D0
+
+#define LED_RUNNING 13
+#define LED_SPORT_FOOTBALL 4
+#define LED_SPORT_GOLF 5
+#define LED_SPORT_SLALOM 6
+
+const int sportLEDs[] = {
+  LED_SPORT_FOOTBALL,
+  LED_SPORT_GOLF,
+  LED_SPORT_SLALOM
+};
+const int numModes = sizeof(sportLEDs) / sizeof(sportLEDs[0]);
+
+int state = 0;  // Aktueller Modus (0=football, 1=golf, 2=slalom)
+
+bool lastModeButton = HIGH;
+bool lastLaunchButton = HIGH;
 
 #define speed 200
 #define wheel_setoff 8.2
@@ -24,6 +43,7 @@
 //#define DEBUG2
 //#define DEBUGOUTPUT
 #define DEBUGINTERMEDIATE
+// #define COMMAND
 
 //#define DEBUGPID
 
@@ -33,9 +53,9 @@ Encoder right_enc(3,2);
 Encoder left_enc(19,18);
 
 double setpointr, inputr, outputr;
-double rp = 36, ri = .5, rd = 1; 
+double rp = 36, ri = 2, rd = 1; 
 double setpointl, inputl, outputl;
-double lp = 36, li = .5, ld = 1;
+double lp = 36, li = 2, ld = 1;
 
 PID pid_right(&inputr, &outputr, &setpointr, rp, ri, rd, 0);
 PID pid_left(&inputl, &outputl, &setpointl, lp, li, ld, 0);
@@ -45,7 +65,8 @@ static const float steps_per_cm = 50.0; // TODO: measure this value
 
 static const int in_loop_delay = 0;
 
-const int homePosition = 90;
+// const int homePosition = 94; // aussen max 20p
+const int homePosition = 115; // innen max 42
 int servoPin = PADDLE_PIN;
 static Servo paddleServo;
 
@@ -57,8 +78,9 @@ void initPaddleServo(int pin) {
 
 void movePaddle(float degrees) {
     // Clamp degrees to [0, 180] for most servos
-    degrees = homePosition-90;
+    degrees = homePosition-degrees;
     degrees=constrain(degrees, 0, 180);
+    Serial.println(degrees);
     paddleServo.write(degrees);
 }
 
@@ -123,7 +145,7 @@ void drive_differential (float left_distance, float right_distance, float s = 50
 
 
 
-  for(float step = 0; step <= total_dist; step+= .003){ //0.006 to 0.003
+  for(float step = 0; step <= total_dist; step+= .001){ //0.006 to 0.003
     setpointl = (step * left_ratio);
     setpointr = (step * right_ratio);
 
@@ -311,7 +333,7 @@ void setup() {
 
   Serial.println("Init done");
 
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  
 
   pinMode(right_forward_pin, OUTPUT);
   pinMode(right_backward_pin, OUTPUT);
@@ -326,11 +348,65 @@ void setup() {
   //delay(2000);
   //test_slalom();
 
+  pinMode(BUTTON_SPORT_MODE, INPUT_PULLUP);
+  pinMode(BUTTON_LAUNCH, INPUT_PULLUP);
+
+  pinMode(LED_RUNNING, OUTPUT);
+  pinMode(LED_SPORT_FOOTBALL, OUTPUT);
+  pinMode(LED_SPORT_GOLF, OUTPUT);
+  pinMode(LED_SPORT_SLALOM, OUTPUT);
+
+  updateLEDs();
+}
+
+void updateLEDs() {
+  for (int i = 0; i < numModes; i++) {
+    digitalWrite(sportLEDs[i], (i == state) ? HIGH : LOW);
+  }
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
+  #ifdef COMMAND
   test_drive_serial();
+  #else
+  
+  bool modeButton = digitalRead(BUTTON_SPORT_MODE);
+  if (modeButton == LOW && lastModeButton == HIGH) {
+    state = (state + 1) % numModes;
+    Serial.print("Modus gewechselt zu: ");
+    Serial.println(state);
+    updateLEDs();
+    delay(200); // Entprellen
+  }
+  lastModeButton = modeButton;
+
+  // --- Startknopf (D0) ---
+  bool launchButton = digitalRead(BUTTON_LAUNCH);
+  if (launchButton == LOW && lastLaunchButton == HIGH) {
+    Serial.print("Starte Modus: ");
+    Serial.println(state);
+
+    digitalWrite(LED_RUNNING, HIGH);  // AN während Sport läuft
+
+    switch (state) {
+      case 0:
+        startFootball();
+        break;
+      case 1:
+        startGolf();
+        break;
+      case 2:
+        startSlalom();
+        break;
+    }
+
+    digitalWrite(LED_RUNNING, LOW);  // AUS nach Ende
+    delay(200); // Entprellen
+  }
+  lastLaunchButton = launchButton;
+
+  #endif
 
   //if (digitalRead(BUTTON_PIN) == LOW) {
   //  Serial.println("Button pressed! Executing slalom test...");
@@ -438,6 +514,16 @@ void test_drive_serial() {
       } else {
         Serial.println("No paddle command provided.");
       }
+    } else if (mode == 't') {
+      // analogWrite(left_forward_pin, 255);
+      // analogWrite(right_forward_pin, 255);
+      movePaddle(90);
+      delay(250);
+      movePaddle(22);
+      delay(300);
+      movePaddle(0);
+      // analogWrite(left_forward_pin, 0);
+      // analogWrite(right_forward_pin, 0);
     }
     
     else {
@@ -503,4 +589,37 @@ void test_slalom() {
   Serial.print(ticks_to_cm(right_enc.read()));
   Serial.println(" cm");
   drive(40);
+}
+
+
+
+
+void startFootball() {
+  Serial.println("⚽ Starte Football-Modus");
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(LED_SPORT_FOOTBALL, LOW);
+    delay(300);
+    digitalWrite(LED_SPORT_FOOTBALL, HIGH);
+    delay(300);
+  }
+}
+
+void startGolf() {
+  Serial.println("🏌️ Starte Golf-Modus");
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(LED_SPORT_GOLF, LOW);
+    delay(300);
+    digitalWrite(LED_SPORT_GOLF, HIGH);
+    delay(300);
+  }
+}
+
+void startSlalom() {
+  Serial.println("⛷️ Starte Slalom-Modus");
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(LED_SPORT_SLALOM, LOW);
+    delay(300);
+    digitalWrite(LED_SPORT_SLALOM, HIGH);
+    delay(300);
+  }
 }
