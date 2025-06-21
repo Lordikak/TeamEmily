@@ -124,7 +124,8 @@ int cm_to_ticks(float cm) {
  * @author Team Emily
  */
 
-void drive_differential(float left_distance, float right_distance, float s = 50) {
+
+void drive_differential(float left_distance, float right_distance, float s = 50, bool wait_for_ball = false, float threshold = 4.8) {
     reset_l_PID();
     reset_r_PID();
 
@@ -144,9 +145,17 @@ void drive_differential(float left_distance, float right_distance, float s = 50)
     left_enc.write(0);
     right_enc.write(0);
 
-    for (float step = 0; step <= total_dist; step += .006 /100* s) {  // 0.006 to 0.003
+    float increment = .006 /100* s;
+
+    for (float step = 0; step <= total_dist; step += increment) {  // 0.006 to 0.003
         setpointl = (step * left_ratio);
         setpointr = (step * right_ratio);
+
+        if (wait_for_ball && ( (int) (step/increment) ) % 80 == 0) {
+            if (downDistance() < threshold) {
+                break;
+            }
+        }
 
         {
 #ifdef DEBUG3
@@ -313,6 +322,13 @@ float forwardDistance(){
     return fdist-5.2;
 }
 
+float downDistance(){
+    int dist = sensor1.readRangeSingleMillimeters();
+    // conv to cm
+    float fdist = ((float) dist) / 10.0;
+    return fdist-5.2;
+}
+
 void setupSensor(){
   Wire.begin();
 
@@ -388,7 +404,7 @@ void updateLEDs() {
     }
 }
 
-#define COMMAND
+// #define COMMAND
 
 void loop() {
 // put your main code here, to run repeatedly:
@@ -549,6 +565,11 @@ void test_drive_serial() {
           Serial.print("Distance Front: ");
           Serial.print(dist);
           Serial.println();
+        } else if (mode == 'b'){
+          float dist = downDistance();
+          Serial.print("Distance bottom: ");
+          Serial.print(dist);
+          Serial.println();
         }
 
         else {
@@ -572,7 +593,7 @@ void t() {
     movePaddle(90);
     delay(250);
     movePaddle(22);
-    delay(300);
+    delay(250);
     movePaddle(0);
 }
 
@@ -646,7 +667,23 @@ void startGolf() {
         digitalWrite(LED_SPORT_GOLF, HIGH);
         delay(300);
     }
+    
+    // while (downDistance() > 4.8) {
+    //     float distance = 2.0;
+    //     int super_speed = 5;
+    //     drive_differential(distance, distance, super_speed);
+    // }
+    // drive_differential(0, 0, 10);
+    // delay(30);
+    // t();
+
+    float distance = 15.0;
+    drive_differential(distance, distance, 20, true, 4.8);
+    
+    delay(30);
     t();
+    
+
 }
 
 void startSlalom() {
