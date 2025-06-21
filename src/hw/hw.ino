@@ -125,7 +125,7 @@ int cm_to_ticks(float cm) {
  */
 
 
-void drive_differential(float left_distance, float right_distance, float s = 50, bool wait_for_ball = false, float threshold = 4.8) {
+void drive_differential(float left_distance, float right_distance, float s = 50, bool wait_for_ball = false, float threshold = 10) {
     reset_l_PID();
     reset_r_PID();
 
@@ -172,6 +172,7 @@ void drive_differential(float left_distance, float right_distance, float s = 50,
         inputr = ticks_to_cm(right_enc.read());
 
         {
+            
 #ifdef DEBUG2
             Serial.print("Input Left: ");
             Serial.print(inputl);
@@ -326,7 +327,7 @@ float downDistance(){
     int dist = sensor1.readRangeSingleMillimeters();
     // conv to cm
     float fdist = ((float) dist) / 10.0;
-    return fdist-5.2;
+    return fdist;
 }
 
 void setupSensor(){
@@ -560,6 +561,8 @@ void test_drive_serial() {
             t();
             // analogWrite(left_forward_pin, 0);
             // analogWrite(right_forward_pin, 0);
+        }else if (mode == 'f'){
+            startFootball();
         } else if (mode == 'o'){
           float dist = forwardDistance();
           Serial.print("Distance Front: ");
@@ -648,17 +651,26 @@ void test_slalom() {
     drive(40,s);
 }
 
-void startFootball() {
-    Serial.println("⚽ Starte Football-Modus");
-    for (int i = 0; i < 3; i++) {
-        digitalWrite(LED_SPORT_FOOTBALL, LOW);
-        delay(300);
-        digitalWrite(LED_SPORT_FOOTBALL, HIGH);
-        delay(300);
+void startFootball(){
+    float threashold = 45.0;
+    float fdist = forwardDistance();
+    if(fdist > threashold) {
+        t();
+        return;
     }
-    t();
-}
 
+    float threashold2 = 45.0;
+    rotate(7, -wheel_setoff,40);
+    fdist = forwardDistance();
+    if (fdist > threashold2) {
+        t();
+        return;
+    }
+
+    rotate(-14, wheel_setoff, 40);
+    t();
+
+}
 void startGolf() {
     Serial.println("🏌️ Starte Golf-Modus");
     for (int i = 0; i < 3; i++) {
@@ -678,7 +690,7 @@ void startGolf() {
     // t();
 
     float distance = 15.0;
-    drive_differential(distance, distance, 20, true, 4.8);
+    drive_differential(distance, distance, 20, true, 10);
     
     delay(30);
     t();
@@ -696,3 +708,5 @@ void startSlalom() {
     }
     test_slalom();
 }
+
+
