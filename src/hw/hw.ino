@@ -307,10 +307,10 @@ void rotate(float deg, float dist = 0, float s = 50) {
 }
 
 float forwardDistance(){
-    int dist = sensor1.readRangeSingleMillimeters();
+    int dist = sensor2.readRangeSingleMillimeters();
     // conv to cm
     float fdist = ((float) dist) / 10.0;
-    return fdist-13.0;
+    return fdist-5.2;
 }
 
 void setupSensor(){
