@@ -28,7 +28,7 @@ const int sportLEDs[] = {
     LED_SPORT_SLALOM};
 const int numModes = sizeof(sportLEDs) / sizeof(sportLEDs[0]);
 
-int state = 0;  // Aktueller Modus (0=football, 1=golf, 2=slalom)
+int state = 1;  // Aktueller Modus (0=football, 1=golf, 2=slalom)
 
 bool lastModeButton = HIGH;
 bool lastLaunchButton = HIGH;
@@ -69,7 +69,7 @@ static const float steps_per_cm = 50.0;               // TODO: measure this valu
 static const int in_loop_delay = 0;
 
 // const int homePosition = 94; // aussen max 20p
-const int homePosition = 115;  // innen max 42
+const int homePosition = 123;  // innen max 42
 int servoPin = PADDLE_PIN;
 static Servo paddleServo;
 
@@ -115,6 +115,8 @@ float ticks_to_cm(long count) {
 int cm_to_ticks(float cm) {
     return cm * steps_per_cm;
 }
+
+static float cor_time = 0;
 /***
  * Rotates the bot around a point on the axis of the wheels.
  * @param degrees the degrees of the rotation in degrees
@@ -256,10 +258,14 @@ void drive_differential(float left_distance, float right_distance, float s = 50,
     Serial.println();
 #endif
 
+
     bool reached = true;
-    unsigned long reached_time = 0;
+    unsigned long reached_time = millis();
 
     while (true) {
+        if (reached && (millis() - reached_time >= cor_time)) {
+            break;
+        }
         inputl = ticks_to_cm(left_enc.read());
         inputr = ticks_to_cm(right_enc.read());
 
@@ -288,17 +294,16 @@ void drive_differential(float left_distance, float right_distance, float s = 50,
         }
 
         // If reached, check if 2 seconds have passed
-        if (reached && (millis() - reached_time >= 5000)) {
-            break;
-        }
+        
 
         delay(in_loop_delay);
     }
 
+
     analogWrite(left_forward_pin, 0);
-    analogWrite(right_forward_pin, 255);
+    analogWrite(right_forward_pin, 0);
     analogWrite(left_backward_pin, 0);
-    analogWrite(right_backward_pin, 255);
+    analogWrite(right_backward_pin, 0);
 
 #ifdef DEBUG
     Serial.println("Done Rotating");
@@ -364,6 +369,29 @@ void drive(float dist, float s = 50) {
     drive_differential(dist, dist, s);
 }
 
+void t(bool drive = false, int driveSpeed = 0) {
+    
+    //delay(700);
+
+    if(drive){
+        analogWrite(left_backward_pin, 0);
+        analogWrite(right_backward_pin, 0);
+        analogWrite(left_forward_pin,driveSpeed);
+        analogWrite(right_forward_pin,driveSpeed);
+    }
+    movePaddle(90);
+    delay(230);
+    movePaddle(37);
+    delay(200);
+    movePaddle(0);
+    if(drive){
+        analogWrite(left_forward_pin, 0);
+        analogWrite(right_forward_pin, 0);
+        analogWrite(left_backward_pin, 0);
+        analogWrite(right_backward_pin, 0);
+    }
+}
+
 void setup() {
     // put your setup code here, to run once:
     pid_left.SetOutputLimits(-255, 255);
@@ -371,7 +399,7 @@ void setup() {
 
     Serial.begin(9600);
 
-    Serial.println("Init done");
+    
 
     pinMode(right_forward_pin, OUTPUT);
     pinMode(right_backward_pin, OUTPUT);
@@ -395,8 +423,9 @@ void setup() {
     pinMode(LED_SPORT_SLALOM, OUTPUT);
 
     updateLEDs();
-
+    Serial.println("Setting up Sensor");
     setupSensor();
+    Serial.println("Init done");
 }
 
 void updateLEDs() {
@@ -405,9 +434,10 @@ void updateLEDs() {
     }
 }
 
-// #define COMMAND
+//#define COMMAND
 
 void loop() {
+    //Serial.print("TEST");
 // put your main code here, to run repeatedly:
 #ifdef COMMAND
     test_drive_serial();
@@ -544,6 +574,7 @@ void test_drive_serial() {
             Serial.println("Done driving.");
         } else if (mode == 'p' || mode == 'P') {
             // Paddle control
+            //delay(10000);
             String paddleCommand = input.substring(1);
             paddleCommand.trim();
             if (paddleCommand.length() > 0) {
@@ -592,21 +623,21 @@ void test_drive_serial() {
     }
 }
 
-void t() {
-    movePaddle(90);
-    delay(250);
-    movePaddle(22);
-    delay(250);
-    movePaddle(0);
-}
-
 void test_slalom() {
     // drive(40);
 
     float s = 70;
     float r = 20.5;
+
+    float first_dist = 8;
     delay(2000);
-    rotate(90, r,s);
+
+    drive(r+first_dist,s);
+    cor_time = 500;
+    rotate(-90,0,s);
+    cor_time = 0;
+
+    rotate(180, r,s);
     // Print distance after first rotate
     Serial.print("After rotate(90, 20): L=");
     Serial.print(ticks_to_cm(left_enc.read()));
@@ -635,41 +666,52 @@ void test_slalom() {
     Serial.print(ticks_to_cm(right_enc.read()));
     Serial.println(" cm");
 
-    rotate(180, r,s);
+    rotate(100, r,s);
     Serial.print("After rotate(180, 20): L=");
     Serial.print(ticks_to_cm(left_enc.read()));
     Serial.print(" cm, R=");
     Serial.print(ticks_to_cm(right_enc.read()));
     Serial.println(" cm");
 
-    rotate(-90, -r,s);
-    Serial.print("After rotate(-90, -20): L=");
-    Serial.print(ticks_to_cm(left_enc.read()));
-    Serial.print(" cm, R=");
-    Serial.print(ticks_to_cm(right_enc.read()));
-    Serial.println(" cm");
-    drive(40,s);
+
+    drive(4*r,s);
 }
 
 void startFootball(){
+    cor_time = 700;
     float threashold = 45.0;
     float fdist = forwardDistance();
-    if(fdist > threashold) {
+    Serial.print("Distance Front: ");
+    Serial.print(fdist);
+    Serial.println(" cm");
+    if(fdist > threashold && false) {
+        Serial.println("Shooting straight");
         t();
+        cor_time=0;
         return;
     }
 
     float threashold2 = 45.0;
-    rotate(7, -wheel_setoff,40);
+    float deg = 12;
+    float extra = 4;
+    rotate(deg, -wheel_setoff,40);
+    delay(200);
     fdist = forwardDistance();
+    Serial.print("Distance Front after rotate: ");
+    Serial.print(fdist);
+    Serial.println(" cm");
     if (fdist > threashold2) {
-        t();
+        Serial.println("Shooting right");
+        rotate(extra, -wheel_setoff, 40);
+        t(true, 100);
+        cor_time = 0;
         return;
     }
 
-    rotate(-14, wheel_setoff, 40);
-    t();
-
+    rotate(-2*deg-extra, -wheel_setoff, 40);
+    Serial.println("Shooting left");
+    t(true, 100);
+    cor_time=0;
 }
 void startGolf() {
     Serial.println("🏌️ Starte Golf-Modus");
@@ -693,7 +735,7 @@ void startGolf() {
     drive_differential(distance, distance, 20, true, 10);
     
     delay(30);
-    t();
+    t(true, 50);
     
 
 }
