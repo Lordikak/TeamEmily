@@ -408,7 +408,6 @@ void startFootball(){
     rotate(deg, -wheel_setoff,40);
     float fdist = forwardDistance();
     if (fdist > threashold) {
-        Serial.println("Shooting right");
         rotate(extra, -wheel_setoff, 40);
         t(true, 100);
         cor_time = 0;
