@@ -409,7 +409,7 @@ void startFootball(){
     float fdist = forwardDistance();
     if (fdist > threashold) {
         rotate(extra, -wheel_setoff, 40);
-        t(true, 100);
+        kick(true, 100);
         cor_time = 0;
         return;
     }
@@ -418,6 +418,7 @@ void startFootball(){
     kick(true, 100);
     cor_time=0;
 }
+
 void startGolf() {
     float distance = 15.0;
     drive_differential(distance, distance, 20, true, 10);
